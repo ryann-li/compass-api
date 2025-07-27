@@ -14,7 +14,11 @@ interface TowerUpdate {
 
 const WRITE_KEY = process.env.WRITE_KEY;
 
+// our allowed full_names
+const NAMES = ["Ryan", "Daniel", "Jess", "Razi", "Sushant"];
+
 export async function POST(req: NextRequest) {
+  // auth
   const auth = req.headers.get("authorization") || "";
   const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
   if (!WRITE_KEY || token !== WRITE_KEY) {
@@ -24,11 +28,11 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // ─── parse payload ─────────────────────────────────────
+  // parse
   const { fob_id, timestamp, location, event, battery_level } =
     (await req.json()) as TowerUpdate;
 
-  // ─── ensure table exists ──────────────────────────────
+  // ensure table
   await sql`
     CREATE TABLE IF NOT EXISTS latest_locations (
       fob_id        text PRIMARY KEY,
@@ -43,15 +47,21 @@ export async function POST(req: NextRequest) {
     );
   `;
 
-  // ─── upsert using fob_id for both user_id & full_name ──
+  // pick full_name based on fob_id so it's deterministic:
+  const nameIndex = fob_id
+    .split("")
+    .reduce((sum, ch) => sum + ch.charCodeAt(0), 0) % NAMES.length;
+  const full_name = NAMES[nameIndex];
+
+  // upsert
   await sql`
     INSERT INTO latest_locations
       (fob_id, user_id, full_name, lat, lon, accuracy_m, event, battery_level, last_updated)
     VALUES
       (
+        ${fob_id},      -- user_id = fob_id
         ${fob_id},
-        ${fob_id},
-        ${fob_id},
+        ${full_name},   -- full_name chosen from list
         ${location.lat},
         ${location.lon},
         ${location.accuracy_m},
