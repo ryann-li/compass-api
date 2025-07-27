@@ -12,16 +12,9 @@ interface TowerUpdate {
   battery_level: number;
 }
 
-// hard‑coded mapping
-const FOB_MAP: Record<string, { user_id: string; full_name: string }> = {
-  "FOB-12345": { user_id: "user-4", full_name: "Daniel" },
-  "FOB-99999": { user_id: "user-1", full_name: "Jess" },
-};
-
 const WRITE_KEY = process.env.WRITE_KEY;
 
 export async function POST(req: NextRequest) {
-  // ─── simple Bearer check ───────────────────────────────
   const auth = req.headers.get("authorization") || "";
   const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
   if (!WRITE_KEY || token !== WRITE_KEY) {
@@ -32,8 +25,8 @@ export async function POST(req: NextRequest) {
   }
 
   // ─── parse payload ─────────────────────────────────────
-  const body = (await req.json()) as TowerUpdate;
-  const { fob_id, timestamp, location, event, battery_level } = body;
+  const { fob_id, timestamp, location, event, battery_level } =
+    (await req.json()) as TowerUpdate;
 
   // ─── ensure table exists ──────────────────────────────
   await sql`
@@ -50,18 +43,15 @@ export async function POST(req: NextRequest) {
     );
   `;
 
-  // ─── upsert ────────────────────────────────────────────
-  const mapping =
-    FOB_MAP[fob_id] ?? { user_id: "unknown", full_name: "Unknown" };
-
+  // ─── upsert using fob_id for both user_id & full_name ──
   await sql`
     INSERT INTO latest_locations
       (fob_id, user_id, full_name, lat, lon, accuracy_m, event, battery_level, last_updated)
     VALUES
       (
         ${fob_id},
-        ${mapping.user_id},
-        ${mapping.full_name},
+        ${fob_id},
+        ${fob_id},
         ${location.lat},
         ${location.lon},
         ${location.accuracy_m},
@@ -83,7 +73,6 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ ok: true });
 }
 
-// support preflight
 export async function OPTIONS() {
   return new NextResponse(null, {
     status: 204,
